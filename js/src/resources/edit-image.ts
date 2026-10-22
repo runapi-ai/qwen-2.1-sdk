@@ -1,0 +1,57 @@
+import type { HttpClient, RequestOptions, PollingOptions } from '@runapi.ai/core';
+import { compactParams } from '@runapi.ai/core';
+import { pollUntilComplete } from '@runapi.ai/core/internal';
+import type {
+  CompletedEditImageResponse,
+  EditImageParams,
+  EditImageResponse,
+  TaskCreateResponse,
+} from '../types';
+
+const ENDPOINT = '/api/v1/qwen_2_1/edit_image';
+
+/** Applies targeted edits to a source image using natural-language prompts. */
+export class EditImage {
+  constructor(private readonly http: HttpClient) {}
+
+  /**
+   * Edit an image with a natural-language prompt and wait until complete.
+   * @param params Image-to-image parameters.
+   * @param options Per-request and polling overrides.
+   * @returns The completed edit-image result.
+   */
+  async run(params: EditImageParams, options?: RequestOptions & PollingOptions): Promise<CompletedEditImageResponse> {
+    const { id } = await this.create(params, options);
+    const response = await pollUntilComplete<EditImageResponse>(() => this.get(id, options), {
+      maxWaitMs: options?.maxWaitMs,
+      pollIntervalMs: options?.pollIntervalMs,
+    });
+    return response as CompletedEditImageResponse;
+  }
+
+  /**
+   * Create an edit-image task; returns immediately with a task id.
+   * @param params Image-to-image parameters.
+   * @param options Per-request overrides.
+   * @returns The task creation result with id.
+   */
+  async create(params: EditImageParams, options?: RequestOptions): Promise<TaskCreateResponse> {
+    const body = compactParams(params);
+    return this.http.request<TaskCreateResponse>('POST', ENDPOINT, {
+      body,
+      ...options,
+    });
+  }
+
+  /**
+   * Fetch the current status of an edit-image task.
+   * @param id The task id.
+   * @param options Per-request overrides.
+   * @returns The current edit-image task status.
+   */
+  async get(id: string, options?: RequestOptions): Promise<EditImageResponse> {
+    return this.http.request<EditImageResponse>('GET', `${ENDPOINT}/${id}`, {
+      ...options,
+    });
+  }
+}
